@@ -9,12 +9,13 @@
 set -euo pipefail
 
 # ===============================================
-# PARÂMETROS
+# PARAMETERS
 # ===============================================
 CONFIG="$PWD/config.yaml"
 SAMPLESHEET="$PWD/samplesheet.tsv"
 CHROM_FILE="$PWD/chrom_list.txt"
 TASK_LIST="$PWD/task_list.txt"
+
 
 DEBUG=0
 if [[ "${1:-}" == "--debug" ]]; then
@@ -23,7 +24,7 @@ if [[ "${1:-}" == "--debug" ]]; then
     echo "=== DEBUG MODE ENABLED ==="
 fi
 
-get_yaml() { python3 "$PWD/get_yaml.py" "$CONFIG" "$1"; }
+get_yaml() { python3 "$PWD/scripts/utils/get_yaml.py" "$CONFIG" "$1"; }
 
 MAX_SUBMIT=$(get_yaml max_submit)
 MAX_JOBS=$(get_yaml max_jobs)
@@ -37,7 +38,7 @@ SINGULARITY_IMG=$(get_yaml singularity_img)
 
 mkdir -p "$OUTPUT_DIR" "$FILTERED_DIR" "$TMP_DIR" "logs"
 
-echo "=== CONFIGURAÇÕES CARREGADAS ==="
+echo "=== LOADED CONFIGURATIONS ==="
 echo "OUTPUT_DIR: $OUTPUT_DIR"
 echo "FILTERED_DIR: $FILTERED_DIR"
 echo "TMP_DIR: $TMP_DIR"
@@ -50,9 +51,9 @@ echo "MAX_SUBMIT (QOS limit): $MAX_SUBMIT"
 echo "==============================="
 
 # ===============================================
-# GERAR TASK LIST (amostra × cromossomo)
+# GENERATE TASK LIST (sample × chromosome)
 # ===============================================
-echo ">> Gerando lista de tarefas (amostra × cromossomo)..."
+echo ">> Generating task list (sample × chromosome)..."
 > "$TASK_LIST"
 tail -n +2 "$SAMPLESHEET" | while IFS=$'\t' read -r SAMPLE BAM_PATH; do
     while read -r CHROM; do
@@ -61,10 +62,10 @@ tail -n +2 "$SAMPLESHEET" | while IFS=$'\t' read -r SAMPLE BAM_PATH; do
 done
 
 TOTAL_TASKS=$(wc -l < "$TASK_LIST")
-echo "Arquivo $TASK_LIST criado com $TOTAL_TASKS combinações."
+echo "File $TASK_LIST created with $TOTAL_TASKS combinations."
 
 # ===============================================
-# FUNÇÃO PARA SUBMISSÃO EM CHUNKS
+# FUNCTION FOR CHUNK SUBMISSION
 # ===============================================
 submit_in_chunks() {
     local script="$1"
@@ -85,15 +86,15 @@ submit_in_chunks() {
             JOBID=$(sbatch --parsable --dependency=afterok:${dep} --array=${start}-${end}%${MAX_SUBMIT} "$script")
         fi
 
-        echo "[DEBUG] Submetido bloco ${start}-${end} ($step) JOBID=$JOBID"
+        echo "[DEBUG] Submitted block ${start}-${end} ($step) JOBID=$JOBID"
         jobids+=("$JOBID")
 
-        # Aguarda o bloco terminar
-        echo "[DEBUG] Aguardando bloco ${start}-${end} de ${step}..."
+        # Wait for the block to finish
+        echo "[DEBUG] Waiting for block ${start}-${end} of ${step}..."
         while squeue -j "$JOBID" 2>/dev/null | grep -q "$USER"; do
             sleep 30
             if [[ $DEBUG -eq 1 ]]; then
-                echo "[DEBUG] Ainda rodando tasks do bloco ${start}-${end}..."
+                echo "[DEBUG] Still running tasks from block ${start}-${end}..."
                 squeue -u $USER -o "%.18i %.9P %.8j %.8u %.2t %.10M %.6D %R"
             fi
         done
@@ -101,26 +102,25 @@ submit_in_chunks() {
         start=$((end + 1))
     done
 
-    # Retorna todos os jobids concatenados por vírgula para dependência correta
+    # Return all jobids concatenated by comma for correct dependency
     echo "$(IFS=,; echo "${jobids[*]}")"
 }
 
 # ===============================================
-# SUBMISSÃO
+# SUBMISSION
 # ===============================================
-echo "[DEBUG] Submetendo Mutect2..."
-JOBID_MUTECT2=$(submit_in_chunks "scripts/mutect2_chr.sh" "$TOTAL_TASKS" "Mutect2" "")
+echo "[DEBUG] Submitting Mutect2..."
+JOBID_MUTECT2=$(submit_in_chunks "scripts/variant_calling/mutect2_chr.sh" "$TOTAL_TASKS" "Mutect2" "")
 
-echo "[DEBUG] Submetendo FilterMutectCalls..."
-JOBID_FMC=$(submit_in_chunks "scripts/filtermutectcalls_chr.sh" "$TOTAL_TASKS" "FilterMutectCalls" "$JOBID_MUTECT2")
+echo "[DEBUG] Submitting FilterMutectCalls..."
+JOBID_FMC=$(submit_in_chunks "scripts/variant_calling/filtermutectcalls_chr.sh" "$TOTAL_TASKS" "FilterMutectCalls" "$JOBID_MUTECT2")
 
-echo "[DEBUG] Submetendo MergeVCFs..."
-JOBID_MERGE=$(sbatch --parsable --dependency=afterok:${JOBID_FMC} scripts/merge_vcfs.sh)
+echo "[DEBUG] Submitting MergeVCFs..."
+JOBID_MERGE=$(sbatch --parsable --dependency=afterok:${JOBID_FMC} scripts/variant_calling/merge_vcf.sh)
 
 echo "=============================================="
-echo "Pipeline submetida com sucesso!"
-echo "Mutect2 JOBID final: $JOBID_MUTECT2"
-echo "FilterMutectCalls JOBID final: $JOBID_FMC"
-echo "MergeVCFs JOBID: $JOBID_MERGE"
+echo "Pipeline submitted successfully!"
+echo "Final Mutect2 JOBID: $JOBID_MUTECT2"
+echo "Final FilterMutectCalls JOBID: $JOBID_FMC"
+echo "Final MergeVCFs JOBID: $JOBID_MERGE"
 echo "=============================================="
-
