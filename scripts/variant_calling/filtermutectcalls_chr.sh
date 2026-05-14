@@ -40,7 +40,7 @@ echo "[$(date)] Running FilterMutectCalls for $SAMPLE $CHROM" | tee -a "$LOG_FIL
 echo "Input: $MUTECT2_OUT" | tee -a "$LOG_FILE"
 echo "Output: $FILTERED_OUT" | tee -a "$LOG_FILE"
 
-# === Idempotência ===
+# Idempotency
 if [[ -s "$FILTERED_OUT" ]]; then
     echo "[$(date)] SKIP: $FILTERED_OUT already exists" | tee -a "$LOG_FILE"
     exit 0
@@ -51,7 +51,7 @@ if [[ ! -s "$MUTECT2_OUT" ]]; then
     exit 2
 fi
 
-# Executa
+# Run
 CMD="singularity exec $SINGULARITY_IMG gatk FilterMutectCalls -R $REFERENCE -V $MUTECT2_OUT -O $FILTERED_OUT"
 echo "Command: $CMD" | tee -a "$LOG_FILE"
 eval "$CMD" &>> "$LOG_FILE"

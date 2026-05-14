@@ -30,13 +30,14 @@ LOG_FILE="${LOG_DIR}/${SAMPLE}_Mutect2_${CHROM}.log"
 
 mkdir -p "$OUTPUT_DIR" "$LOG_DIR"
 
-# Se já existe VCF final não reprocessa
+# Idempotency
+# If final VCF already exists, do not reprocess
 if [[ -s "$MUTECT2_OUT" ]]; then
   echo "[$(date)] SKIP: ${MUTECT2_OUT} already exists — skipping Mutect2." | tee -a "$LOG_FILE"
   exit 0
 fi
 
-# Se log contém marca de conclusão, pula
+# If log contains completion mark, skip
 if grep -q "^DONE MUTECT2$" "$LOG_FILE" 2>/dev/null; then
   echo "[$(date)] SKIP: ${LOG_FILE} contains DONE MUTECT2 — skipping." | tee -a "$LOG_FILE"
   exit 0
@@ -53,7 +54,7 @@ singularity exec "$SINGULARITY_IMG" gatk Mutect2 \
     &>> "$LOG_FILE"
 
 if [[ $? -ne 0 ]]; then
-    echo "[$(date)] ERRO no Mutect2 para $SAMPLE - $CHROM" | tee -a "$LOG_FILE" >&2
+    echo "[$(date)] ERROR in Mutect2 for $SAMPLE - $CHROM" | tee -a "$LOG_FILE" >&2
     exit 1
 fi
 
