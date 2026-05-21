@@ -6,13 +6,11 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 
-# OPCIONAL: ativar ambiente Conda ou módulo Python
-# source ~/miniconda3/etc/profile.d/conda.sh
 # conda activate variant-calling
 
-echo "Iniciando pipeline às $(date)"
+echo "Initializing pipeline at $(date)"
 
-python3 exclusivas.py
+python3 exclusives.py
 
-echo "Pipeline finalizado às $(date)"
+echo "Initializing finished at $(date)"
 
