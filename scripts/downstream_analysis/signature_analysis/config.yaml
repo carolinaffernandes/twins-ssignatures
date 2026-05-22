@@ -1,0 +1,3 @@
+vcf_dir: "path/to/vcf"
+group_file: "groups.txt"
+indel_file: "indels.txt"
